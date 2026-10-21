@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#06070d">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Turbo Bike Rush</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="wrap">
+    <!-- HUD -->
+    <div id="hud">
+      <div class="box"><span>SCORE</span><b id="score">0</b></div>
+      <div class="box speed"><span>SPEED</span><b id="speed">0</b><small>km/h</small></div>
+      <div class="box"><span>🪙 COINS</span><b id="coins">0</b></div>
+      <div class="box"><span>LEVEL</span><b id="level">1</b></div>
+    </div>
+    <div id="bars">
+      <div class="bar" id="fuelWrap"><div id="fuelBar"></div><span>⛽ FUEL</span></div>
+      <div class="bar" id="nitroWrap"><div id="nitroBar"></div><span>🔥 NITRO</span></div>
+    </div>
+    <div id="pillion" class="hidden">
+      <i>🙋‍♀️</i>
+      <div><b>PILLION ON BOARD</b><small>Drop in <em id="pillionDist">0</em> m · coins x2</small></div>
+    </div>
+
+    <button id="fsBtn" title="Full screen (F)">⛶</button>
+
+    <canvas id="game" width="480" height="720"></canvas>
+    <div id="vignette"></div>
+
+    <!-- Start Screen -->
+    <div class="overlay" id="startScreen">
+      <div class="logo">
+        <p class="tag">— ENDLESS HIGHWAY —</p>
+        <h1>TURBO<em>BIKE RUSH</em></h1>
+      </div>
+      <p class="best">🏆 BEST <b id="bestStart">0</b></p>
+      <p class="choose">CHOOSE YOUR BIKE</p>
+      <div id="bikeSelect"></div>
+      <button id="startBtn">▶ START RACE</button>
+      <div class="help">
+        <p><kbd>←</kbd><kbd>→</kbd> Steer &nbsp; <kbd>↑</kbd> Gas &nbsp; <kbd>↓</kbd> Brake</p>
+        <p><kbd>SPACE</kbd> Nitro &nbsp; <kbd>P</kbd> Pause &nbsp; <kbd>M</kbd> Mute</p>
+        <div class="tips">
+          <p>⛽ Fuel khatam hone se pehle road se fuel can uthao</p>
+          <p>🙋‍♀️ Kabhi kabhi raste mein koi lift maangegi. Use uthao, peeche baithegi: coins x2 + drop bonus</p>
+          <p>⚠ Left side wali gaadiyan saamne se aati hain</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pause Screen -->
+    <div class="overlay hidden" id="pauseScreen">
+      <div class="panel">
+        <h2>PAUSED</h2>
+        <p>Press <kbd>P</kbd> to resume</p>
+      </div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div class="overlay hidden" id="overScreen">
+      <div class="panel">
+        <h2 id="overTitle">CRASHED!</h2>
+        <div class="results">
+          <div><span>SCORE</span><b id="finalScore">0</b></div>
+          <div><span>DISTANCE</span><b><em id="finalDist">0</em> m</b></div>
+          <div><span>LIFTS GIVEN</span><b id="finalLifts">0</b></div>
+          <div><span>BEST</span><b id="bestOver">0</b></div>
+        </div>
+        <p id="newBest" class="hidden">🏆 NEW BEST!</p>
+        <button id="restartBtn">↻ RIDE AGAIN</button>
+        <button id="menuBtn" class="ghost">CHANGE BIKE</button>
+      </div>
+    </div>
+
+    <!-- Mobile Controls -->
+    <div id="touch">
+      <button data-key="ArrowLeft">◀</button>
+      <button data-key="ArrowDown">■</button>
+      <button data-key="Space" class="nitro">N₂O</button>
+      <button data-key="ArrowUp">▲</button>
+      <button data-key="ArrowRight">▶</button>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
