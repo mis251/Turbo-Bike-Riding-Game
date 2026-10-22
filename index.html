@@ -52,11 +52,14 @@
       <div><b>PILLION ON BOARD</b><small>Drop in <em id="pillionDist">0</em> m · coins x2</small></div>
     </div>
 
+    <button id="pauseBtn" title="Pause (P)" aria-label="Pause">❚❚</button>
+
     <canvas id="game" width="480" height="720"></canvas>
     <div id="vignette"></div>
 
     <!-- 3 MODES: Home Screen -->
     <div class="overlay hidden" id="homeScreen">
+      <button class="icon-btn gear settings-open" title="Settings" aria-label="Settings">⚙</button>
       <div class="logo">
         <p class="tag">— ENDLESS HIGHWAY —</p>
         <h1>TURBO<em>BIKE RUSH</em></h1>
@@ -85,6 +88,7 @@
     <!-- Start Screen (Bike select) -->
     <div class="overlay hidden" id="startScreen">
       <button id="backBtn" class="ghost back">◀ MODES</button>
+      <button class="icon-btn gear settings-open" title="Settings" aria-label="Settings">⚙</button>
       <div class="logo">
         <p class="tag">— ENDLESS HIGHWAY —</p>
         <h1>TURBO<em>BIKE RUSH</em></h1>
@@ -112,6 +116,62 @@
       <div class="panel">
         <h2>PAUSED</h2>
         <p>Press <kbd>P</kbd> or tap to resume</p>
+        <button id="resumeBtn">▶ RESUME</button>
+        <div class="row-btns">
+          <button class="ghost settings-open">⚙ SETTINGS</button>
+          <button id="quitBtn" class="ghost">✕ QUIT</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="overlay hidden" id="settingsScreen">
+      <div class="panel settings">
+        <h2>SETTINGS</h2>
+
+        <div class="set-group">
+          <p class="set-title">🎮 STEERING</p>
+          <div class="seg" id="steerSeg">
+            <button data-steer="tilt">📱 TILT (GYRO)</button>
+            <button data-steer="buttons">◀ ▶ BUTTONS</button>
+          </div>
+        </div>
+
+        <div class="set-group" id="tiltBox">
+          <p class="set-title">📱 TILT CONTROL</p>
+          <p class="set-note" id="tiltNote">Phone ko left/right jhuka kar dekho 👇</p>
+          <div class="tilt-meter"><span class="mid"></span><i id="tiltKnob"></i><em>L</em><b>R</b></div>
+
+          <label class="set-row">
+            <span>Sensitivity <small id="sensVal">50%</small></span>
+            <input type="range" id="setSens" min="10" max="36" step="1">
+          </label>
+          <label class="set-row">
+            <span>Dead zone <small id="deadVal">3°</small></span>
+            <input type="range" id="setDead" min="0" max="10" step="1">
+          </label>
+          <label class="set-row toggle">
+            <span>Ulta steering (Invert)</span>
+            <input type="checkbox" id="setInvert"><i></i>
+          </label>
+          <button id="calBtn" class="ghost wide">📐 CALIBRATE (phone jaise pakda hai wahi center)</button>
+          <p class="set-note ok" id="calMsg"></p>
+        </div>
+
+        <div class="set-group">
+          <p class="set-title">🔊 SOUND &amp; FEEL</p>
+          <label class="set-row toggle">
+            <span>Sound</span>
+            <input type="checkbox" id="setSound"><i></i>
+          </label>
+          <label class="set-row toggle">
+            <span>Vibration</span>
+            <input type="checkbox" id="setVibrate"><i></i>
+          </label>
+        </div>
+
+        <button id="setDone">✓ DONE</button>
+        <button id="setReset" class="ghost">↺ RESET DEFAULTS</button>
       </div>
     </div>
 
