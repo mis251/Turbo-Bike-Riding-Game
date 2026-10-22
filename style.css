@@ -53,15 +53,6 @@ canvas#game { position: absolute; inset: 0; width: 100%; height: 100%; display: 
   #wrap { width: 100vw; box-shadow: none; }
 }
 
-/* Full screen button */
-#fsBtn {
-  position: absolute; z-index: 12;
-  bottom: calc(14px + env(safe-area-inset-bottom)); right: 12px;
-  width: 38px; height: 38px; border-radius: 10px; font-size: 20px; letter-spacing: 0;
-  color: #fff; background: rgba(15, 16, 32, .6); border: 1px solid rgba(255, 255, 255, .25);
-  backdrop-filter: blur(4px);
-}
-@media (pointer: coarse) { #fsBtn { top: calc(124px + env(safe-area-inset-top)); bottom: auto; right: 10px; } }
 #vignette {
   position: absolute; inset: 0; pointer-events: none; z-index: 4;
   background: radial-gradient(ellipse at 50% 55%, transparent 55%, rgba(0, 0, 0, .55) 100%);
@@ -258,6 +249,52 @@ kbd {
 #touch button.nitro { background: rgba(122, 92, 255, .55); font-size: 16px; }
 #touch button:active { background: rgba(255, 75, 43, .65); }
 @media (pointer: coarse) { #touch { display: flex; } }
+
+/* Gyro steering: left = BRAKE, right = GAS (bade buttons), beech mein Nitro */
+#touch button.pedal { flex: 1.6; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; }
+#touch button.pedal small { font-size: 11px; letter-spacing: 2px; margin-top: 4px; font-weight: 700; }
+#touch button.brake { background: rgba(255, 59, 59, .35); border-color: rgba(255, 120, 120, .5); }
+#touch button.gas { background: rgba(46, 204, 113, .35); border-color: rgba(120, 255, 170, .5); }
+#touch button.brake:active { background: rgba(255, 59, 59, .7); }
+#touch button.gas:active { background: rgba(46, 204, 113, .7); }
+#touch button.steer { display: none; }
+/* gyro na ho to purane ◀ ▶ wapas */
+#touch.nogyro button.steer { display: block; }
+#touch.nogyro button.pedal { flex: 1; }
+
+/* ---------- Home page: 3 modes ---------- */
+#modeSelect { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 360px; }
+.mode-card {
+  display: flex; align-items: center; gap: 12px; padding: 14px 14px; border-radius: 16px;
+  color: #fff; text-align: left; font-family: inherit; letter-spacing: 1px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, .09), rgba(255, 255, 255, .02));
+  border: 2px solid rgba(255, 255, 255, .14);
+  transition: transform .15s, border-color .15s, box-shadow .15s;
+}
+.mode-card:hover, .mode-card:active {
+  transform: translateY(-2px); border-color: var(--hot);
+  box-shadow: 0 0 18px rgba(255, 75, 43, .45);
+}
+.mode-card i { font-style: normal; font-size: 20px; width: 56px; flex-shrink: 0; text-align: center; letter-spacing: -2px; white-space: nowrap; }
+.mode-card div { flex: 1; }
+.mode-card b { display: block; font-family: "Orbitron", sans-serif; font-size: 17px; font-weight: 800; letter-spacing: 2px; }
+.mode-card small { display: block; font-size: 12px; color: #bbc; font-weight: 600; letter-spacing: .5px; margin-top: 2px; }
+.mode-card em { font-style: normal; font-size: 12px; color: var(--gold); font-weight: 700; white-space: nowrap; }
+.mode-card[data-mode="racing"] { border-color: rgba(255, 211, 77, .35); }
+
+.mode-chip {
+  font-family: "Orbitron", sans-serif; font-size: 13px; font-weight: 800; letter-spacing: 3px;
+  color: #fff; padding: 4px 16px; border-radius: 20px;
+  background: linear-gradient(135deg, var(--hot2), var(--violet));
+}
+.ghost.back {
+  position: absolute; top: calc(12px + env(safe-area-inset-top)); left: 12px; z-index: 2;
+  padding: 7px 14px; font-size: 12px;
+}
+#installBtn { margin-top: 4px; }
+
+.touch-only { display: none; }
+@media (pointer: coarse) { .touch-only { display: block; } }
 
 @media (max-width: 400px) {
   h1 { font-size: 40px; } h1 em { font-size: 24px; }
