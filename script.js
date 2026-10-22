@@ -122,9 +122,16 @@ addEventListener("keydown", e => {
 });
 addEventListener("keyup", e => (keys[e.code] = false));
 
+// ================== SETTINGS (phone mein save hoti hain) ==================
+const SETTINGS_DEF = { steer: "tilt", sens: 22, dead: 3, invert: false, zero: 0, sound: true, vibrate: true };
+let settings = { ...SETTINGS_DEF };
+try { settings = { ...SETTINGS_DEF, ...JSON.parse(localStorage.getItem("bikeSettings") || "{}") }; } catch (e) {}
+function saveSettings() { try { localStorage.setItem("bikeSettings", JSON.stringify(settings)); } catch (e) {} }
+function buzz(p) { if (settings.vibrate && navigator.vibrate) { try { navigator.vibrate(p); } catch (e) {} } }
+
 document.querySelectorAll("#touch button").forEach(b => {
   const k = b.dataset.key;
-  b.addEventListener("pointerdown", e => { e.preventDefault(); keys[k] = true; });
+  b.addEventListener("pointerdown", e => { e.preventDefault(); keys[k] = true; buzz(8); });
   ["pointerup", "pointerleave", "pointercancel"].forEach(ev =>
     b.addEventListener(ev, () => (keys[k] = false)));
 });
@@ -132,17 +139,20 @@ document.querySelectorAll("#touch button").forEach(b => {
 // ---------- GYRO STEERING (phone tilt) ----------
 // Phone ko left/right jhukao = bike left/right. Buttons sirf Brake / Nitro / Gas.
 // Agar phone mein gyro sensor nahi hai ya permission nahi mili, to ◀ ▶ buttons wapas aa jayenge.
-let tiltSteer = 0, gyroOn = false, gyroAsked = false;
-const TILT_DEAD = 3, TILT_FULL = 22;      // degrees: 3° tak kuch nahi, 22° par full steer
+// Settings se: sensitivity, dead zone, ulta (invert), calibrate, ya Buttons steering.
+let tiltSteer = 0, tiltRaw = 0, gyroOn = false, gyroAsked = false;
 function onTilt(e) {
   if (e.gamma == null) return;
   gyroOn = true;
-  ui.touch.classList.remove("nogyro");
+  if (settings.steer === "tilt") ui.touch.classList.remove("nogyro");
   let g = e.gamma;                          // portrait: left/right tilt
   const ang = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
   if (ang === 90) g = e.beta; else if (ang === -90 || ang === 270) g = -e.beta; else if (ang === 180) g = -e.gamma;
-  const a = Math.min(1, Math.max(0, (Math.abs(g) - TILT_DEAD) / (TILT_FULL - TILT_DEAD)));
-  tiltSteer = Math.sign(g) * a;
+  tiltRaw = g;
+  const v = (g - settings.zero) * (settings.invert ? -1 : 1);
+  const full = Math.max(settings.dead + 2, settings.sens);
+  const a = Math.min(1, Math.max(0, (Math.abs(v) - settings.dead) / (full - settings.dead)));
+  tiltSteer = Math.sign(v) * a;
 }
 function enableGyro() {
   if (gyroAsked) return;
@@ -165,7 +175,7 @@ const brake = () => keys.ArrowDown || keys.KeyS;
 const nitroKey = () => keys.Space || keys.ShiftLeft || keys.ShiftRight;
 
 // ================== SOUND ==================
-let audio, engineOsc, engineGain, muted = false;
+let audio, engineOsc, engineGain, muted = !settings.sound;
 function initAudio() {
   if (audio) return;
   audio = new (window.AudioContext || window.webkitAudioContext)();
@@ -197,7 +207,11 @@ function crashSound() {
   g.gain.value = 0.4; src.buffer = buf;
   src.connect(g).connect(audio.destination); src.start();
 }
-function toggleMute() { muted = !muted; if (engineGain) engineGain.gain.value = 0; }
+function toggleMute() {
+  muted = !muted; if (engineGain) engineGain.gain.value = 0;
+  settings.sound = !muted; saveSettings();
+  if (typeof syncSettingsUI === "function") syncSettingsUI();
+}
 
 // ================== GAME STATE ==================
 let state = "menu";
@@ -346,6 +360,7 @@ function startGame() {
     enableGyro();
     // 1.5 sec mein gyro ka data nahi aaya to ◀ ▶ buttons dikha do
     setTimeout(() => { if (!gyroOn) ui.touch.classList.add("nogyro"); }, 1500);
+    if (settings.steer === "buttons") ui.touch.classList.add("nogyro");
   }
   initAudio();
   if (audio.state === "suspended") audio.resume();
@@ -411,8 +426,87 @@ $("backBtn").onclick = () => {
 document.addEventListener("visibilitychange", () => {
   if (document.hidden && state === "play") togglePause();
 });
-// Phone par P key nahi hoti: Pause screen par tap karke resume
-ui.pause.addEventListener("click", () => { if (state === "pause") togglePause(); });
+// Phone par P key nahi hoti: Pause screen par tap karke resume (buttons ke alawa kahin bhi)
+ui.pause.addEventListener("click", e => {
+  if (e.target.closest && e.target.closest(".panel button")) return;
+  if (state === "pause") togglePause();
+});
+$("pauseBtn").addEventListener("click", () => { if (state === "play" || state === "pause") togglePause(); });
+$("resumeBtn").onclick = () => { if (state === "pause") togglePause(); };
+$("quitBtn").onclick = () => {                  // race chhod ke bike select par
+  if (state !== "pause") return;
+  state = "menu";
+  ui.pause.classList.add("hidden");
+  reset();
+  ui.start.classList.remove("hidden");
+  renderBikeSelect();
+};
+
+// ================== SETTINGS SCREEN ==================
+const setUI = {
+  screen: $("settingsScreen"), sens: $("setSens"), dead: $("setDead"), invert: $("setInvert"),
+  sound: $("setSound"), vib: $("setVibrate"), sensVal: $("sensVal"), deadVal: $("deadVal"),
+  knob: $("tiltKnob"), tiltNote: $("tiltNote"), tiltBox: $("tiltBox"), calMsg: $("calMsg"),
+};
+function syncSettingsUI() {
+  document.querySelectorAll("#steerSeg button").forEach(b => b.classList.toggle("active", b.dataset.steer === settings.steer));
+  setUI.sens.value = 46 - settings.sens;                       // slider: zyada = zyada sensitive
+  setUI.sensVal.textContent = Math.round((46 - settings.sens - 10) / 26 * 100) + "%";
+  setUI.dead.value = settings.dead;
+  setUI.deadVal.textContent = settings.dead + "°";
+  setUI.invert.checked = settings.invert;
+  setUI.sound.checked = settings.sound;
+  setUI.vib.checked = settings.vibrate;
+  setUI.tiltBox.classList.toggle("disabled", settings.steer !== "tilt");
+}
+function openSettings() {
+  if (isTouch) enableGyro();               // iPhone: permission isi tap par maangi jayegi
+  syncSettingsUI();
+  setUI.tiltNote.textContent = isTouch ? "Phone ko left/right jhuka kar dekho 👇" : "Tilt steering sirf phone par chalti hai";
+  setUI.calMsg.textContent = "";
+  setUI.screen.classList.remove("hidden");
+}
+function closeSettings() { setUI.screen.classList.add("hidden"); }
+document.querySelectorAll(".settings-open").forEach(b => b.addEventListener("click", e => { e.stopPropagation(); openSettings(); }));
+$("setDone").onclick = closeSettings;
+$("setReset").onclick = () => {
+  settings = { ...SETTINGS_DEF };
+  muted = !settings.sound;
+  saveSettings(); syncSettingsUI();
+  setUI.calMsg.textContent = "Default settings wapas aa gayi";
+};
+document.querySelectorAll("#steerSeg button").forEach(b => b.onclick = () => {
+  settings.steer = b.dataset.steer;
+  ui.touch.classList.toggle("nogyro", settings.steer === "buttons" || (isTouch && !gyroOn && state === "play"));
+  saveSettings(); syncSettingsUI();
+});
+setUI.sens.oninput = () => { settings.sens = 46 - +setUI.sens.value; saveSettings(); syncSettingsUI(); };
+setUI.dead.oninput = () => {
+  settings.dead = +setUI.dead.value;
+  if (settings.sens < settings.dead + 4) settings.sens = settings.dead + 4;
+  saveSettings(); syncSettingsUI();
+};
+setUI.invert.onchange = () => { settings.invert = setUI.invert.checked; saveSettings(); };
+setUI.sound.onchange = () => {
+  settings.sound = setUI.sound.checked; muted = !settings.sound;
+  if (engineGain) engineGain.gain.value = 0;
+  saveSettings();
+};
+setUI.vib.onchange = () => { settings.vibrate = setUI.vib.checked; saveSettings(); buzz(20); };
+$("calBtn").onclick = () => {
+  if (!gyroOn) { setUI.calMsg.textContent = "Gyro sensor nahi mila — phone par try karo"; return; }
+  settings.zero = Math.round(tiltRaw * 10) / 10;
+  saveSettings();
+  setUI.calMsg.textContent = "✓ Calibrated! Ab ye position seedhi (center) maani jayegi";
+  buzz(30);
+};
+// Live tilt preview (settings khuli ho tab)
+function updateTiltPreview() {
+  if (setUI.screen.classList.contains("hidden")) return;
+  const v = gyroOn ? tiltSteer : 0;
+  setUI.knob.style.left = (50 + v * 45) + "%";
+  setUI.knob.classList.toggle("on", Math.abs(v) > 0);
+}
 
 function togglePause() {
   if (state === "play") {
@@ -430,6 +524,7 @@ function gameOver(reason) {
   if (engineGain) engineGain.gain.value = 0;
   if (reason === "crash") {
     crashSound();
+    buzz([60, 40, 140]);
     shake = 18;
     for (let i = 0; i < 60; i++) spawnParticle(player.x, player.y, true);
   } else if (reason === "finish") {
@@ -550,7 +645,7 @@ function update(dt) {
 
   // Steering (keyboard / buttons, warna phone tilt)
   let steer = (right() ? 1 : 0) - (left() ? 1 : 0);
-  if (!steer && gyroOn && isTouch) steer = tiltSteer;
+  if (!steer && gyroOn && isTouch && settings.steer === "tilt") steer = tiltSteer;
   const target = steer * (320 + speed * 0.15) * bike.handling;
   player.vx += (target - player.vx) * Math.min(1, 10 * bike.handling * dt);
   player.x += player.vx * dt;
@@ -1899,6 +1994,7 @@ function loop(now) {
     trees.forEach(t => { t.y += 200 * dt; if (t.y > H + 60) t.y -= treeSpan; });
   }
   draw();
+  updateTiltPreview();
   requestAnimationFrame(loop);
 }
 
