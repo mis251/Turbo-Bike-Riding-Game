@@ -1,5 +1,7 @@
-// ================== TURBO BIKE RUSH v2 ==================
+// ================== TURBO BIKE RUSH v3 ==================
 // Features: 3 bikes, two-way traffic, fuel system, nitro, near-miss bonus
+// v3: 3 modes (One Way / Two Way / Racing), phone tilt (gyro) steering,
+//     auto full screen, auto pause, PWA install
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const W = canvas.width;
@@ -29,7 +31,18 @@ const TAU = Math.PI * 2;
 const ROAD_L = 60, ROAD_R = 420, LANES = 4;
 const LANE_W = (ROAD_R - ROAD_L) / LANES;
 const laneX = i => ROAD_L + LANE_W * i + LANE_W / 2;
-const isOncoming = lane => lane < 2;
+const isOncoming = lane => mode === "twoway" && lane < 2;   // One Way / Racing: sab same direction
+
+// ================== MODES ==================
+const MODES = {
+  oneway: { name: "ONE WAY" },
+  twoway: { name: "TWO WAY" },
+  racing: { name: "RACING" },
+};
+let mode = "twoway";
+const RACE_DIST = 4000;          // Racing mode: 4 km
+const RIVAL_NAMES = ["RAJU", "VICKY", "SONU"];
+const bestKey = m => (m === "twoway" ? "bikeBest" : "bikeBest_" + m);   // purana Two Way best same rahega
 
 // ================== BIKES ==================
 const BIKES = [
@@ -53,6 +66,8 @@ const ui = {
   overTitle: $("overTitle"), finalScore: $("finalScore"), finalDist: $("finalDist"),
   bestStart: $("bestStart"), bestOver: $("bestOver"), newBest: $("newBest"),
   pillion: $("pillion"), pillionDist: $("pillionDist"), finalLifts: $("finalLifts"),
+  home: $("homeScreen"), levelLabel: $("levelLabel"), modeName: $("modeName"),
+  tipOncoming: $("tipOncoming"), tipRace: $("tipRace"), touch: $("touch"),
 };
 
 // Lift maangne wali passengers ke looks (random)
@@ -64,8 +79,9 @@ const RIDERS = [
 ];
 
 let best = 0, selected = 0;
+const loadBest = m => { try { return +localStorage.getItem(bestKey(m)) || 0; } catch (e) { return 0; } };
 try {
-  best = +localStorage.getItem("bikeBest") || 0;
+  best = loadBest(mode);
   selected = +localStorage.getItem("bikeSel") || 0;
 } catch (e) {}
 if (!BIKES[selected]) selected = 0;
@@ -101,7 +117,7 @@ addEventListener("keydown", e => {
   if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(e.code)) e.preventDefault();
   if (e.code === "KeyP" && (state === "play" || state === "pause")) togglePause();
   if (e.code === "KeyM") toggleMute();
-  if (e.code === "Enter" && (state === "menu" || state === "over")) startGame();
+  if (e.code === "Enter" && (state === "menu" || state === "over") && ui.home.classList.contains("hidden")) startGame();
 });
 addEventListener("keyup", e => (keys[e.code] = false));
 
@@ -111,6 +127,35 @@ document.querySelectorAll("#touch button").forEach(b => {
   ["pointerup", "pointerleave", "pointercancel"].forEach(ev =>
     b.addEventListener(ev, () => (keys[k] = false)));
 });
+
+// ---------- GYRO STEERING (phone tilt) ----------
+// Phone ko left/right jhukao = bike left/right. Buttons sirf Brake / Nitro / Gas.
+// Agar phone mein gyro sensor nahi hai ya permission nahi mili, to ◀ ▶ buttons wapas aa jayenge.
+let tiltSteer = 0, gyroOn = false, gyroAsked = false;
+const TILT_DEAD = 3, TILT_FULL = 22;      // degrees: 3° tak kuch nahi, 22° par full steer
+function onTilt(e) {
+  if (e.gamma == null) return;
+  gyroOn = true;
+  ui.touch.classList.remove("nogyro");
+  let g = e.gamma;                          // portrait: left/right tilt
+  const ang = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+  if (ang === 90) g = e.beta; else if (ang === -90 || ang === 270) g = -e.beta; else if (ang === 180) g = -e.gamma;
+  const a = Math.min(1, Math.max(0, (Math.abs(g) - TILT_DEAD) / (TILT_FULL - TILT_DEAD)));
+  tiltSteer = Math.sign(g) * a;
+}
+function enableGyro() {
+  if (gyroAsked) return;
+  gyroAsked = true;
+  const D = window.DeviceOrientationEvent;
+  if (!D) return;
+  if (typeof D.requestPermission === "function") {        // iPhone: permission maangna padta hai
+    D.requestPermission()
+      .then(s => { if (s === "granted") addEventListener("deviceorientation", onTilt); })
+      .catch(() => {});
+  } else {
+    addEventListener("deviceorientation", onTilt);
+  }
+}
 
 const left = () => keys.ArrowLeft || keys.KeyA;
 const right = () => keys.ArrowRight || keys.KeyD;
@@ -159,6 +204,7 @@ let bike, player, traffic, pickups, particles, trees, texts;
 let speed, distance, coins, bonus, nitro, fuel, level, roadOffset, wheelAnim;
 let spawnTimer, coinTimer, nitroTimer, fuelTimer, lowFuelBeep, shake, boosting, braking;
 let girlTimer, pillion, lifts, animT = 0;
+let rivals = [], raceCount = 0, finishCount = 0, place = 0;   // Racing mode
 const LIFT_DIST = 700;   // kitne meter baad passenger utregi
 
 const CAR_COLORS = ["#e63946", "#457b9d", "#f4a261", "#2a9d8f", "#9b5de5", "#f1fa3c", "#ffffff", "#8d99ae"];
@@ -185,7 +231,80 @@ function reset() {
   girlTimer = 14 + Math.random() * 10;   // pehli lift jaldi, phir rare
   pillion = null; lifts = 0;
   if (ui.pillion) ui.pillion.classList.add("hidden");
+
+  // Racing: 3 auto bikes ke saath start grid + 3-2-1 countdown
+  rivals = []; finishCount = 0; place = 0; raceCount = 0;
+  if (mode === "racing") {
+    speed = 0;
+    raceCount = 3.6;
+    const others = BIKES.filter((_, i) => i !== selected);
+    others.push({ name: "YELLOW FLASH", color: "#ffbe0b", accent: "#111111", suit: "#2d1b4e", helmet: "#111111",
+                  top: 950, accel: 420 });
+    [0, 1, 3].forEach((lane, i) => {
+      const rb = others[i];
+      rivals.push({
+        name: RIVAL_NAMES[i], bike: rb, lane, x: laneX(lane), dist: 0, speed: 150,
+        top: rb.top, accel: rb.accel, skill: 0.9 + Math.random() * 0.1,
+        boost: 0, boostCd: 4 + Math.random() * 6, laneCd: 0, bumpCd: 0, tilt: 0, finished: false,
+      });
+    });
+  }
 }
+
+// ---------- Racing: auto bikes (AI) ----------
+const rivalY = r => player.y - (r.dist - distance) * 10;
+const laneBusy = (l, y, self) =>
+  traffic.some(c => c.lane === l && Math.abs(c.y - y) < 190) ||
+  rivals.some(o => o !== self && o.lane === l && Math.abs(rivalY(o) - y) < 110);
+
+function updateRivals(dt) {
+  for (const r of rivals) {
+    r.bumpCd -= dt; r.laneCd -= dt; r.boostCd -= dt;
+    if (r.finished) { r.dist += r.speed * dt / 10; continue; }
+    const ry = rivalY(r);
+
+    // speed target (rubber band: zyada aage ho to thoda dheere, peeche ho to thoda tez)
+    let aim = r.top * r.skill + level * 20;
+    const gap = r.dist - distance;
+    if (gap > 250) aim *= 0.9; else if (gap < -250) aim *= 1.1;
+    if (r.boostCd <= 0 && r.boost <= 0) { r.boost = 1.4; r.boostCd = 7 + Math.random() * 8; }
+    if (r.boost > 0) { aim += 380; r.boost -= dt; }
+
+    // aage gaadi hai to lane badlo, warna dheere ho jao
+    const blocker = traffic.find(c => c.lane === r.lane && c.y < ry && ry - c.y < 240);
+    if (blocker) {
+      const opts = [r.lane - 1, r.lane + 1].filter(l => l >= 0 && l < LANES && !laneBusy(l, ry, r));
+      if (opts.length && r.laneCd <= 0) { r.lane = opts[Math.floor(Math.random() * opts.length)]; r.laneCd = 0.7; }
+      else aim = Math.min(aim, blocker.speed * 0.95);
+    }
+
+    const diff = aim - r.speed;
+    r.speed += Math.sign(diff) * Math.min(Math.abs(diff), (diff > 0 ? r.accel : 700) * dt);
+    const tx = laneX(r.lane);
+    r.tilt = (tx - r.x) / 90;
+    r.x += (tx - r.x) * Math.min(1, 4 * dt);
+    r.dist += r.speed * dt / 10;
+
+    // agar phir bhi gaadi se takra gayi to bas slow ho jayegi (AI crash nahi hoti)
+    for (const c of traffic) {
+      if (Math.abs(c.x - r.x) < (c.w + 30) / 2 && Math.abs(c.y - ry) < (c.h + 80) / 2) r.speed = Math.min(r.speed, c.speed * 0.8);
+    }
+
+    // player se takkar = dono ko jhatka (game over nahi)
+    if (r.bumpCd <= 0 && Math.abs(r.x - player.x) < 30 && Math.abs(ry - player.y) < 72) {
+      const s = Math.sign(player.x - r.x) || 1;
+      player.vx = s * 260; r.x -= s * 8;
+      if (ry < player.y) speed = Math.max(150, speed - 160); else r.speed *= 0.85;
+      shake = Math.max(shake, 5); r.bumpCd = 0.5;
+      beep(160, 0.12, "square", 0.08);
+    }
+
+    if (r.dist >= RACE_DIST) { r.finished = true; r.place = ++finishCount; }
+  }
+}
+
+const racePos = () => 1 + rivals.filter(r => r.finished || r.dist > distance).length;
+const ordinal = n => n + (n === 1 ? "ST" : n === 2 ? "ND" : n === 3 ? "RD" : "TH");
 
 // Mobile par full screen (browser bar chhup jayega)
 const isTouch = matchMedia("(pointer: coarse)").matches;
@@ -200,17 +319,33 @@ function goFullscreen() {
   }
   try { screen.orientation && screen.orientation.lock && screen.orientation.lock("portrait").catch(() => {}); } catch (e) {}
 }
+let fsManualOff = false;           // user ne khud ⛶ se band kiya to dobara zabardasti nahi
 function toggleFullscreen() {
   if (document.fullscreenElement || document.webkitFullscreenElement) {
+    fsManualOff = true;
     (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-  } else goFullscreen();
+  } else { fsManualOff = false; goFullscreen(); }
+}
+// AUTO FULL SCREEN: phone par screen ko kahin bhi pehli baar touch karte hi full screen
+// (browser bina touch ke full screen allow nahi karta, isliye pehla touch zaroori hai)
+if (isTouch) {
+  document.addEventListener("pointerdown", e => {
+    if (!gyroAsked) enableGyro();
+    if (fsManualOff) return;
+    if (!(document.fullscreenElement || document.webkitFullscreenElement)) goFullscreen();
+  }, true);
 }
 const fsBtn = document.getElementById("fsBtn");
 if (fsBtn) fsBtn.onclick = toggleFullscreen;
 addEventListener("keydown", e => { if (e.code === "KeyF") toggleFullscreen(); });
 
 function startGame() {
-  if (isTouch) goFullscreen();
+  if (isTouch) {
+    if (!fsManualOff) goFullscreen();
+    enableGyro();
+    // 1.5 sec mein gyro ka data nahi aaya to ◀ ▶ buttons dikha do
+    setTimeout(() => { if (!gyroOn) ui.touch.classList.add("nogyro"); }, 1500);
+  }
   initAudio();
   if (audio.state === "suspended") audio.resume();
   reset();
@@ -228,6 +363,55 @@ $("menuBtn").onclick = () => {
   ui.start.classList.remove("hidden");
   renderBikeSelect();
 };
+
+// ================== PAGES (Home → Mode → Bike select) ==================
+// Har mode ka apna link: #oneway  #twoway  #racing  (khali = Home page)
+function updateModeBests() {
+  Object.keys(MODES).forEach(m => { const el = $("best_" + m); if (el) el.textContent = "🏆 " + loadBest(m); });
+}
+function route() {
+  if (state === "play" || state === "pause") return;
+  const h = location.hash.replace("#", "");
+  state = "menu";
+  ui.over.classList.add("hidden");
+  ui.pause.classList.add("hidden");
+  if (!MODES[h]) {                              // Home page
+    ui.start.classList.add("hidden");
+    ui.home.classList.remove("hidden");
+    updateModeBests();
+    return;
+  }
+  mode = h;
+  try { localStorage.setItem("bikeMode", mode); } catch (e) {}
+  best = loadBest(mode);
+  ui.bestStart.textContent = best;
+  ui.modeName.textContent = MODES[mode].name;
+  ui.tipOncoming.classList.toggle("hidden", mode !== "twoway");
+  ui.tipRace.classList.toggle("hidden", mode !== "racing");
+  ui.levelLabel.textContent = mode === "racing" ? "POSITION" : "LEVEL";
+  reset();
+  ui.home.classList.add("hidden");
+  ui.start.classList.remove("hidden");
+  renderBikeSelect();
+}
+addEventListener("hashchange", route);
+document.querySelectorAll(".mode-card").forEach(b => {
+  b.onclick = () => {
+    if (location.hash === "#" + b.dataset.mode) route();
+    else location.hash = b.dataset.mode;
+  };
+});
+$("backBtn").onclick = () => {
+  history.pushState("", document.title, location.pathname + location.search);
+  route();
+};
+
+// AUTO PAUSE: call aaye / app badlo / tab badlo to game apne aap ruk jayega
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden && state === "play") togglePause();
+});
+// Phone par P key nahi hoti: Pause screen par tap karke resume
+ui.pause.addEventListener("click", () => { if (state === "pause") togglePause(); });
 
 function togglePause() {
   if (state === "play") {
@@ -247,14 +431,17 @@ function gameOver(reason) {
     crashSound();
     shake = 18;
     for (let i = 0; i < 60; i++) spawnParticle(player.x, player.y, true);
+  } else if (reason === "finish") {
+    [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => beep(f, 0.18, "triangle", 0.1), i * 130));
   } else {
     beep(300, 0.3, "triangle"); setTimeout(() => beep(200, 0.5, "triangle"), 250);
   }
   const score = Math.floor(getScore());
   const isBest = score > best;
-  if (isBest) { best = score; try { localStorage.setItem("bikeBest", best); } catch (e) {} }
+  if (isBest) { best = score; try { localStorage.setItem(bestKey(mode), best); } catch (e) {} }
   setTimeout(() => {
-    ui.overTitle.textContent = reason === "crash" ? "CRASHED!" : "OUT OF FUEL!";
+    ui.overTitle.textContent = reason === "crash" ? "CRASHED!" :
+      reason === "finish" ? (place === 1 ? "🏆 1ST PLACE!" : "FINISHED " + ordinal(place)) : "OUT OF FUEL!";
     ui.finalScore.textContent = score;
     ui.finalDist.textContent = Math.floor(distance);
     ui.finalLifts.textContent = lifts;
@@ -272,6 +459,7 @@ const getScore = () => distance + coins * 50 + bonus;
 function spawnCar() {
   const lane = Math.floor(Math.random() * LANES);
   if (traffic.some(c => c.lane === lane && c.y < 160 && c.y > -400)) return;
+  if (rivals.some(r => r.lane === lane && rivalY(r) < 160 && rivalY(r) > -400)) return;   // auto bike ke upar gaadi nahi
   const oncoming = isOncoming(lane);
   const truck = Math.random() < 0.2;
   traffic.push({
@@ -291,7 +479,8 @@ function spawnPickup(type) {
     for (let i = 0; i < 5; i++) pickups.push({ type, x: laneX(lane), y: -40 - i * 50, r: 11, t: Math.random() * 6 });
   } else if (type === "girl") {
     // apni side (lane 2/3) mein khadi hogi, jahan gaadi paas na ho
-    const free = [2, 3].filter(l => !traffic.some(c => c.lane === l && c.y < 200 && c.y > -350));
+    const sideLanes = mode === "twoway" ? [2, 3] : [0, 1, 2, 3];
+    const free = sideLanes.filter(l => !traffic.some(c => c.lane === l && c.y < 200 && c.y > -350));
     if (!free.length) return false;
     const l = free[Math.floor(Math.random() * free.length)];
     pickups.push({ type, x: laneX(l), y: -60, r: 20, t: 0,
@@ -319,6 +508,16 @@ function floatText(x, y, text, color) {
 
 // ================== UPDATE ==================
 function update(dt) {
+  // Racing: 3-2-1-GO countdown, tab tak sab ruka rahega
+  if (raceCount > 0) {
+    const before = Math.ceil(raceCount - 0.6);
+    raceCount -= dt;
+    const after = Math.ceil(raceCount - 0.6);
+    if (after !== before) beep(after > 0 ? 440 : 880, after > 0 ? 0.15 : 0.35, "square", 0.09);
+    updateHUD();
+    return;
+  }
+
   const topSpeed = bike.top + level * 20;
   let maxSpeed = topSpeed;
   const hasFuel = fuel > 0;
@@ -334,7 +533,7 @@ function update(dt) {
     if (!boosting && speed > topSpeed) speed -= 500 * dt;
 
     // Fuel consumption — speed aur nitro ke hisaab se
-    fuel -= speed * dt * 0.0042 * bike.eff * (boosting ? 1.7 : 1);
+    fuel -= speed * dt * 0.0042 * bike.eff * (boosting ? 1.7 : 1) * (mode === "racing" ? 0.6 : 1);
     if (fuel < 0) fuel = 0;
 
     // Low fuel warning beep
@@ -348,8 +547,9 @@ function update(dt) {
     if (speed <= 15) { speed = 0; gameOver("fuel"); return; }
   }
 
-  // Steering
-  const steer = (right() ? 1 : 0) - (left() ? 1 : 0);
+  // Steering (keyboard / buttons, warna phone tilt)
+  let steer = (right() ? 1 : 0) - (left() ? 1 : 0);
+  if (!steer && gyroOn && isTouch) steer = tiltSteer;
   const target = steer * (320 + speed * 0.15) * bike.handling;
   player.vx += (target - player.vx) * Math.min(1, 10 * bike.handling * dt);
   player.x += player.vx * dt;
@@ -377,7 +577,7 @@ function update(dt) {
   if (spawnTimer <= 0) {
     spawnCar();
     if (level > 3 && Math.random() < 0.35) spawnCar();
-    spawnTimer = Math.max(0.32, 1.1 - level * 0.08) * (500 / Math.max(speed, 300));
+    spawnTimer = Math.max(0.32, 1.1 - level * 0.08) * (500 / Math.max(speed, 300)) * (mode === "racing" ? 1.5 : 1);
   }
 
   // Spawn pickups
@@ -420,7 +620,11 @@ function update(dt) {
     c.y += (c.oncoming ? speed + c.speed : speed - c.speed) * dt;
     if (c.swerve) {
       c.swerveT += dt;
-      if (c.swerveT > 1 && c.y > 50 && c.y < H / 2) { c.lane = c.lane === 2 ? 3 : 2; c.swerve = false; }
+      if (c.swerveT > 1 && c.y > 50 && c.y < H / 2) {
+        if (mode === "twoway") c.lane = c.lane === 2 ? 3 : 2;
+        else c.lane = c.lane === 0 ? 1 : c.lane === LANES - 1 ? LANES - 2 : c.lane + (Math.random() < 0.5 ? -1 : 1);
+        c.swerve = false;
+      }
     }
     c.x += (laneX(c.lane) - c.x) * Math.min(1, 3 * dt);
 
@@ -481,6 +685,18 @@ function update(dt) {
     }
   }
 
+  // Racing: auto bikes + finish line
+  if (mode === "racing") {
+    updateRivals(dt);
+    if (distance >= RACE_DIST) {
+      place = finishCount + 1;
+      bonus += [1000, 500, 250, 0][place - 1] || 0;
+      updateHUD();
+      gameOver("finish");
+      return;
+    }
+  }
+
   if (hasFuel && Math.random() < (boosting ? 1 : 0.4))
     spawnParticle(player.x + 16 + (Math.random() - 0.5) * 4, player.y + 45);
   updateParticles(dt);
@@ -505,7 +721,7 @@ function updateHUD() {
   ui.score.textContent = Math.floor(getScore());
   ui.speed.textContent = Math.floor(speed / 5);
   ui.coins.textContent = coins;
-  ui.level.textContent = level;
+  ui.level.textContent = mode === "racing" ? racePos() + "/" + (rivals.length + 1) : level;
   ui.nitro.style.width = nitro + "%";
   const fp = fuel / bike.tank * 100;
   ui.fuel.style.width = fp + "%";
@@ -557,17 +773,25 @@ function draw() {
     ctx.fillRect(ROAD_R, y, 8, 40);
   }
 
-  // Lane dashes (white) for lane 0|1 and 2|3
+  // Lane dashes (white) for lane 0|1 and 2|3  (One Way / Racing: har lane ke beech)
   ctx.fillStyle = "rgba(255,255,255,.75)";
-  [1, 3].forEach(i => {
+  (mode === "twoway" ? [1, 3] : [1, 2, 3]).forEach(i => {
     const x = ROAD_L + LANE_W * i - 2;
     for (let y = -80 + roadOffset; y < H; y += 80) ctx.fillRect(x, y, 4, 40);
   });
-  // Center double yellow line (divider between two directions)
-  const cx = ROAD_L + LANE_W * 2;
-  ctx.fillStyle = "#ffcc00";
-  ctx.fillRect(cx - 5, 0, 3, H);
-  ctx.fillRect(cx + 2, 0, 3, H);
+  // Center double yellow line (divider between two directions) — sirf Two Way mein
+  if (mode === "twoway") {
+    const cx = ROAD_L + LANE_W * 2;
+    ctx.fillStyle = "#ffcc00";
+    ctx.fillRect(cx - 5, 0, 3, H);
+    ctx.fillRect(cx + 2, 0, 3, H);
+  }
+
+  // Racing: start line + finish line (checkered)
+  if (mode === "racing" && player) {
+    checkerLine(player.y - (RACE_DIST - distance) * 10 - 60);
+    checkerLine(player.y + distance * 10 - 60);
+  }
 
   // Direction arrows painted on road
   ctx.fillStyle = "rgba(255,255,255,.18)";
@@ -594,6 +818,16 @@ function draw() {
 
   for (const c of traffic) drawCar(c);
 
+  // Racing: auto bikes + naam
+  for (const r of rivals) {
+    const ry = rivalY(r);
+    if (ry < -120 || ry > H + 120) continue;
+    drawBike(ctx, r.x, ry, r.bike, { tilt: r.tilt, wheel: wheelAnim, boost: r.boost > 0, t: animT, scale: 1.18 });
+    ctx.font = "bold 13px Rajdhani, Segoe UI, Arial"; ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(0,0,0,.6)"; rr(ctx, r.x - 24, ry - 84, 48, 17, 8); ctx.fill();
+    ctx.fillStyle = r.bike.color; ctx.fillText(r.name, r.x, ry - 71);
+  }
+
   for (const p of particles) {
     ctx.globalAlpha = Math.max(0, p.life / p.max);
     ctx.fillStyle = p.color;
@@ -601,7 +835,7 @@ function draw() {
   }
   ctx.globalAlpha = 1;
 
-  if (state !== "over" || overReason === "fuel") {
+  if (state !== "over" || overReason === "fuel" || overReason === "finish") {
     drawBike(ctx, player.x, player.y, bike, {
       tilt: player.tilt, wheel: wheelAnim, boost: boosting, brake: braking, beam: true,
       passenger: pillion, t: animT, scale: 1.18,
@@ -627,7 +861,19 @@ function draw() {
         ctx.fillText("⛽ LOW FUEL!", W / 2, 110);
       }
     }
-    if (distance % 1000 < 60 && distance > 100) banner("LEVEL " + level, "#ffd34d", true);
+    if (mode !== "racing" && distance % 1000 < 60 && distance > 100) banner("LEVEL " + level, "#ffd34d", true);
+
+    if (mode === "racing") {
+      if (raceCount > 0) {
+        const n = Math.ceil(raceCount - 0.6);
+        banner(n > 0 ? String(n) : "GO!", n > 0 ? "#ffd34d" : "#2ecc71", true);
+      } else {
+        const leftM = Math.max(0, Math.ceil(RACE_DIST - distance));
+        ctx.textAlign = "center"; ctx.font = "bold 18px Rajdhani, Segoe UI, Arial";
+        ctx.fillStyle = "rgba(0,0,0,.55)"; rr(ctx, W / 2 - 78, 122, 156, 26, 13); ctx.fill();
+        ctx.fillStyle = "#fff"; ctx.fillText("🏁 FINISH  " + leftM + " m", W / 2, 141);
+      }
+    }
   }
 
   ctx.restore();
@@ -641,6 +887,17 @@ function banner(text, color, show) {
   ctx.font = "bold 36px Segoe UI, Arial";
   ctx.textAlign = "center";
   ctx.fillText(text, W / 2, H / 2 + 8);
+}
+
+function checkerLine(y) {
+  if (y < -40 || y > H + 40) return;
+  const sq = 15;
+  for (let row = 0; row < 2; row++) {
+    for (let x = ROAD_L, i = 0; x < ROAD_R; x += sq, i++) {
+      ctx.fillStyle = (i + row) % 2 ? "#111" : "#f5f5f5";
+      ctx.fillRect(x, y + row * sq, Math.min(sq, ROAD_R - x), sq);
+    }
+  }
 }
 
 function drawArrow(x, y, down) {
@@ -1130,4 +1387,26 @@ function loop(now) {
 resizeGame();
 reset();
 renderBikeSelect();
+route();
+// Android par gyro bina permission chalta hai — pehle se sun lo
+if (isTouch && window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission !== "function") enableGyro();
 requestAnimationFrame(loop);
+
+// ================== PWA (Install + offline) ==================
+if ("serviceWorker" in navigator) {
+  addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+let installEvt = null;
+addEventListener("beforeinstallprompt", e => {
+  e.preventDefault();
+  installEvt = e;
+  $("installBtn").classList.remove("hidden");
+});
+$("installBtn").onclick = async () => {
+  if (!installEvt) return;
+  installEvt.prompt();
+  try { await installEvt.userChoice; } catch (e) {}
+  installEvt = null;
+  $("installBtn").classList.add("hidden");
+};
+addEventListener("appinstalled", () => $("installBtn").classList.add("hidden"));
