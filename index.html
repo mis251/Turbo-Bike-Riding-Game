@@ -38,10 +38,10 @@
   <div id="wrap">
     <!-- HUD -->
     <div id="hud">
-      <div class="box"><span>SCORE</span><b id="score">0</b></div>
-      <div class="box speed"><span>SPEED</span><b id="speed">0</b><small>km/h</small></div>
-      <div class="box"><span>🪙 COINS</span><b id="coins">0</b></div>
-      <div class="box"><span id="levelLabel">LEVEL</span><b id="level">1</b></div>
+      <div class="box speed"><span class="ico" title="Speed">⏲</span><b id="speed">0</b><small>km/h</small></div>
+      <div class="box"><span class="ico" title="Score">🏆</span><b id="score">0</b></div>
+      <div class="box coin"><span class="ico" title="Coins">🪙</span><b id="coins">0</b></div>
+      <div class="box"><span class="ico" id="levelLabel" title="Level">⭐</span><b id="level">1</b></div>
     </div>
     <div id="bars">
       <div class="bar" id="fuelWrap"><div id="fuelBar"></div><span>⛽ FUEL</span></div>
@@ -202,11 +202,17 @@
 
     <!-- Mobile Controls: steering = phone tilt (gyro) -->
     <div id="touch">
-      <button data-key="ArrowLeft" class="steer">◀</button>
-      <button data-key="ArrowDown" class="pedal brake">▼<small>BRAKE</small></button>
-      <button data-key="Space" class="nitro">N₂O</button>
-      <button data-key="ArrowUp" class="pedal gas">▲<small>GAS</small></button>
-      <button data-key="ArrowRight" class="steer">▶</button>
+      <button data-key="ArrowLeft" class="steer sl">◀</button>
+      <button data-key="ArrowDown" class="pedal brake" aria-label="Brake">
+        <svg viewBox="0 0 48 32"><path d="M4 22 Q14 8 30 10 L44 7 Q46 9 44 11 L31 15 Q18 16 10 26 Z" fill="currentColor"/><circle cx="7" cy="24" r="4" fill="currentColor"/></svg>
+        <small>BRAKE</small></button>
+      <button data-key="Space" class="nitro" aria-label="Nitro">
+        <svg viewBox="0 0 24 32"><rect x="8" y="1" width="8" height="5" rx="1.5" fill="#cfe9ff"/><rect x="5" y="6" width="14" height="24" rx="5" fill="currentColor"/><rect x="8" y="12" width="8" height="10" rx="2" fill="#0b3d66"/></svg>
+        <small>N₂O</small></button>
+      <button data-key="ArrowUp" class="pedal gas" aria-label="Race">
+        <svg viewBox="0 0 48 32"><path d="M44 22 Q34 8 18 10 L4 7 Q2 9 4 11 L17 15 Q30 16 38 26 Z" fill="currentColor"/><circle cx="41" cy="24" r="4" fill="currentColor"/></svg>
+        <small>RACE</small></button>
+      <button data-key="ArrowRight" class="steer sr">▶</button>
     </div>
   </div>
 
