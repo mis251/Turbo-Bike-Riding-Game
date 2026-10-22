@@ -1,6 +1,6 @@
 // Turbo Bike Rush — Service Worker (offline + fast load)
 // Game update karo to VERSION badal do (v1 -> v2), taaki sabke phone par naya version aa jaye
-const VERSION = "tbr-v1";
+const VERSION = "tbr-v2";
 const APP_FILES = [
   "./",
   "index.html",
