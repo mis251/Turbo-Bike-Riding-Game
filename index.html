@@ -7,7 +7,29 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Turbo Bike">
   <title>Turbo Bike Rush</title>
+
+  <!-- 1. SHARE PREVIEW (WhatsApp / Instagram / Facebook / Google) -->
+  <meta name="description" content="Turbo Bike Rush – neon highway bike racing game. One Way, Two Way aur Racing mode. Free mein khelo, koi download nahi!">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Turbo Bike Rush">
+  <meta property="og:title" content="Turbo Bike Rush 🏍️ – Free Bike Racing Game">
+  <meta property="og:description" content="Fuel bachao, nitro lagao, auto bikes ko haraao! One Way, Two Way aur Racing – free mein khelo.">
+  <meta property="og:url" content="https://mis251.github.io/Turbo-Bike-Riding-Game/">
+  <meta property="og:image" content="https://mis251.github.io/Turbo-Bike-Riding-Game/preview.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Turbo Bike Rush 🏍️ – Free Bike Racing Game">
+  <meta name="twitter:description" content="Fuel bachao, nitro lagao, auto bikes ko haraao! Free mein khelo.">
+  <meta name="twitter:image" content="https://mis251.github.io/Turbo-Bike-Riding-Game/preview.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+
+  <!-- 2. PWA (phone par Install / Add to Home Screen) -->
+  <link rel="manifest" href="manifest.json">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
@@ -19,7 +41,7 @@
       <div class="box"><span>SCORE</span><b id="score">0</b></div>
       <div class="box speed"><span>SPEED</span><b id="speed">0</b><small>km/h</small></div>
       <div class="box"><span>🪙 COINS</span><b id="coins">0</b></div>
-      <div class="box"><span>LEVEL</span><b id="level">1</b></div>
+      <div class="box"><span id="levelLabel">LEVEL</span><b id="level">1</b></div>
     </div>
     <div id="bars">
       <div class="bar" id="fuelWrap"><div id="fuelBar"></div><span>⛽ FUEL</span></div>
@@ -30,17 +52,44 @@
       <div><b>PILLION ON BOARD</b><small>Drop in <em id="pillionDist">0</em> m · coins x2</small></div>
     </div>
 
-    <button id="fsBtn" title="Full screen (F)">⛶</button>
-
     <canvas id="game" width="480" height="720"></canvas>
     <div id="vignette"></div>
 
-    <!-- Start Screen -->
-    <div class="overlay" id="startScreen">
+    <!-- 3 MODES: Home Screen -->
+    <div class="overlay hidden" id="homeScreen">
       <div class="logo">
         <p class="tag">— ENDLESS HIGHWAY —</p>
         <h1>TURBO<em>BIKE RUSH</em></h1>
       </div>
+      <p class="choose">CHOOSE MODE</p>
+      <div id="modeSelect">
+        <button class="mode-card" data-mode="oneway">
+          <i>⬆️⬆️</i>
+          <div><b>ONE WAY</b><small>Saari gaadiyan ek hi direction mein</small></div>
+          <em id="best_oneway">🏆 0</em>
+        </button>
+        <button class="mode-card" data-mode="twoway">
+          <i>⬇️⬆️</i>
+          <div><b>TWO WAY</b><small>Saamne se bhi gaadiyan aayengi</small></div>
+          <em id="best_twoway">🏆 0</em>
+        </button>
+        <button class="mode-card" data-mode="racing">
+          <i>🏁</i>
+          <div><b>RACING</b><small>3 auto bikes se 4 km ki race</small></div>
+          <em id="best_racing">🏆 0</em>
+        </button>
+      </div>
+      <button id="installBtn" class="ghost hidden">📲 INSTALL GAME</button>
+    </div>
+
+    <!-- Start Screen (Bike select) -->
+    <div class="overlay hidden" id="startScreen">
+      <button id="backBtn" class="ghost back">◀ MODES</button>
+      <div class="logo">
+        <p class="tag">— ENDLESS HIGHWAY —</p>
+        <h1>TURBO<em>BIKE RUSH</em></h1>
+      </div>
+      <p class="mode-chip" id="modeName">TWO WAY</p>
       <p class="best">🏆 BEST <b id="bestStart">0</b></p>
       <p class="choose">CHOOSE YOUR BIKE</p>
       <div id="bikeSelect"></div>
@@ -49,9 +98,11 @@
         <p><kbd>←</kbd><kbd>→</kbd> Steer &nbsp; <kbd>↑</kbd> Gas &nbsp; <kbd>↓</kbd> Brake</p>
         <p><kbd>SPACE</kbd> Nitro &nbsp; <kbd>P</kbd> Pause &nbsp; <kbd>M</kbd> Mute</p>
         <div class="tips">
+          <p class="touch-only">📱 Phone ko left/right tilt karo = steer · Left button = Brake · Right button = Gas</p>
           <p>⛽ Fuel khatam hone se pehle road se fuel can uthao</p>
           <p>🙋‍♀️ Kabhi kabhi raste mein koi lift maangegi. Use uthao, peeche baithegi: coins x2 + drop bonus</p>
-          <p>⚠ Left side wali gaadiyan saamne se aati hain</p>
+          <p id="tipOncoming">⚠ Left side wali gaadiyan saamne se aati hain</p>
+          <p id="tipRace" class="hidden">🏁 4 km race: auto bikes se pehle finish line cross karo</p>
         </div>
       </div>
     </div>
@@ -60,7 +111,7 @@
     <div class="overlay hidden" id="pauseScreen">
       <div class="panel">
         <h2>PAUSED</h2>
-        <p>Press <kbd>P</kbd> to resume</p>
+        <p>Press <kbd>P</kbd> or tap to resume</p>
       </div>
     </div>
 
@@ -80,13 +131,13 @@
       </div>
     </div>
 
-    <!-- Mobile Controls -->
+    <!-- Mobile Controls: steering = phone tilt (gyro) -->
     <div id="touch">
-      <button data-key="ArrowLeft">◀</button>
-      <button data-key="ArrowDown">■</button>
+      <button data-key="ArrowLeft" class="steer">◀</button>
+      <button data-key="ArrowDown" class="pedal brake">▼<small>BRAKE</small></button>
       <button data-key="Space" class="nitro">N₂O</button>
-      <button data-key="ArrowUp">▲</button>
-      <button data-key="ArrowRight">▶</button>
+      <button data-key="ArrowUp" class="pedal gas">▲<small>GAS</small></button>
+      <button data-key="ArrowRight" class="steer">▶</button>
     </div>
   </div>
 
