@@ -53,6 +53,7 @@
     </div>
 
     <button id="pauseBtn" title="Pause (P)" aria-label="Pause">❚❚</button>
+    <button id="camBtn" title="Camera badlo (C)" aria-label="Camera">🎥</button>
 
     <canvas id="game" width="480" height="720"></canvas>
     <div id="vignette"></div>
@@ -128,6 +129,14 @@
     <div class="overlay hidden" id="settingsScreen">
       <div class="panel settings">
         <h2>SETTINGS</h2>
+
+        <div class="set-group">
+          <p class="set-title">🎥 CAMERA</p>
+          <div class="seg" id="camSeg">
+            <button data-cam="cockpit">🏍️ COCKPIT</button>
+            <button data-cam="chase">🎥 CHASE (PEECHE SE)</button>
+          </div>
+        </div>
 
         <div class="set-group">
           <p class="set-title">🎮 STEERING</p>
